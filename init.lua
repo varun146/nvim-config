@@ -165,7 +165,14 @@ vim.o.scrolloff = 10
 -- See `:help 'confirm'`
 vim.o.confirm = true
 
-vim.keymap.set('n', '<Leader>e', ':Rex<CR>', { desc = 'Go back to netrw listing' })
+-- Split creation
+vim.keymap.set('n', '<leader>|', '<cmd>vsp<CR>', { desc = 'Split window vertically' })
+vim.keymap.set('n', '<leader>-', '<cmd>sp<CR>', { desc = 'Split window horizontally' })
+
+-- Close Split
+vim.keymap.set('n', '<leader>x', '<cmd>close<CR>', { desc = 'Close current split' })
+
+vim.keymap.set('n', '<Leader>e', ':Ex<CR>', { desc = 'Go back to netrw listing' })
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -176,6 +183,27 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+
+-- [[ Quickfix Navigation ]]
+--  The quickfix list is a project-wide list of locations (file + line + message).
+--  It gets populated by:
+--    - <leader>q above: loads all current LSP errors/warnings into the list
+--    - <C-q> inside Telescope: sends any grep/search results into the list
+--    - Compiler output or any tool that outputs file:line:message format
+--
+--  Once the list is populated, use ]q / [q to walk through every entry one by one.
+--  Neovim automatically opens the correct file and jumps to the exact line for you.
+--
+--  Typical workflow:
+--    1. Press <leader>q  -> load all LSP diagnostics into quickfix
+--       OR use <leader>sg to grep, then press <C-q> in Telescope to send results to quickfix
+--    2. Press ]q repeatedly to jump to each error/match, fix it, then ]q again for the next
+--    3. Press <leader>qc to close the quickfix window when done
+--
+vim.keymap.set('n', ']q', '<cmd>cnext<CR>', { desc = 'Jump to next item in the quickfix list' })
+vim.keymap.set('n', '[q', '<cmd>cprev<CR>', { desc = 'Jump to previous item in the quickfix list' })
+vim.keymap.set('n', '<leader>qo', '<cmd>copen<CR>', { desc = 'Open the quickfix list window' })
+vim.keymap.set('n', '<leader>qc', '<cmd>cclose<CR>', { desc = 'Close the quickfix list window' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -667,7 +695,49 @@ require('lazy').setup({
       local servers = {
         -- clangd = {},
         -- gopls = {},
-        -- pyright = {},
+        -- NOTE: basedpyright is a stricter fork of pyright installed by Mason.
+        -- Its settings live under 'basedpyright.analysis', NOT 'python.analysis'.
+        --
+        -- basedpyright = {},
+        lemminx = {},
+        pyright = {
+          handlers = {
+            ['workspace/configuration'] = function(_, result)
+              -- Intercept pyright's settings pull request at the protocol level.
+              -- Pyright requests settings per-section (e.g. "python", "python.analysis").
+              -- We respond to each section with our own values, bypassing lspconfig defaults.
+              local settings = {
+                python = {
+                  analysis = {
+                    typeCheckingMode = 'off',
+                    reportArgumentType = 'none',
+                    reportMissingModuleSource = 'none',
+                    reportMissingImports = 'warning',
+                    reportUnknownVariableType = 'none',
+                    reportUnknownMemberType = 'none',
+                    reportUnknownParameterType = 'none',
+                    reportUnknownArgumentType = 'none',
+                    reportMissingParameterType = 'none',
+                    reportOptionalMemberAccess = 'warning',
+                    reportAttributeAccessIssue = 'warning',
+                    reportReturnType = 'warning',
+                  },
+                },
+              }
+              local response = {}
+              for _, item in ipairs(result.items) do
+                if item.section == 'python' then
+                  table.insert(response, settings.python)
+                elseif item.section == 'python.analysis' then
+                  table.insert(response, settings.python.analysis)
+                else
+                  table.insert(response, vim.NIL)
+                end
+              end
+              return response
+            end,
+          },
+        },
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -717,6 +787,8 @@ require('lazy').setup({
         'checkstyle', -- add this
         'java-debug-adapter', -- add this
         'java-test',
+        'lemminx',
+        'cucumber-language-server',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -732,6 +804,7 @@ require('lazy').setup({
             server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
             require('lspconfig')[server_name].setup(server)
           end,
+          basedpyright = function() end,
         },
       }
     end,
@@ -772,10 +845,15 @@ require('lazy').setup({
         java = { 'google-java-format' },
         xml = { 'xmllint' },
         -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
+        python = { 'isort', 'black' },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
+      },
+      formatters = {
+        xmllint = {
+          args = { '--format', '--indent-level', '4', '-' },
+        },
       },
     },
   },
@@ -884,104 +962,105 @@ require('lazy').setup({
     },
   },
 
-  { -- You can easily change to a different colorscheme.
-    -- Change the name of the colorscheme plugin below, and then
-    -- change the command in the config to whatever the name of that colorscheme is.
-    --
-    -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-    -- 'folke/tokyonight.nvim',
-    'catppuccin/nvim',
+  -- { -- You can easily change to a different colorscheme.
+  -- Change the name of the colorscheme plugin below, and then
+  -- change the command in the config to whatever the name of that colorscheme is.
+  --
+  -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
+  -- 'folke/tokyonight.nvim',
+  -- 'catppuccin/nvim',
 
-    priority = 1000, -- Make sure to load this before all the other start plugins.
-    config = function()
-      ---@diagnostic disable-next-line: missing-fields
-      require('catppuccin').setup {
-        styles = {
-          comments = { italic = false }, -- Disable italics in comments
-        },
-        flavour = 'auto', -- latte, frappe, macchiato, mocha
-        background = { -- :h background
-          light = 'latte',
-          dark = 'mocha',
-        },
-        transparent_background = false, -- disables setting the background color.
-        float = {
-          transparent = false, -- enable transparent floating windows
-          solid = false, -- use solid styling for floating windows, see |winborder|
-        },
-        show_end_of_buffer = false, -- shows the '~' characters after the end of buffers
-        term_colors = false, -- sets terminal colors (e.g. `g:terminal_color_0`)
-        dim_inactive = {
-          enabled = false, -- dims the background color of inactive window
-          shade = 'dark',
-          percentage = 0.15, -- percentage of the shade to apply to the inactive window
-        },
-        no_italic = false, -- Force no italic
-        no_bold = false, -- Force no bold
-        no_underline = false, -- Force no underline
-        styles = { -- Handles the styles of general hi groups (see `:h highlight-args`):
-          comments = { 'italic' }, -- Change the style of comments
-          conditionals = { 'italic' },
-          loops = {},
-          functions = {},
-          keywords = {},
-          strings = {},
-          variables = {},
-          numbers = {},
-          booleans = {},
-          properties = {},
-          types = {},
-          operators = {},
-          -- miscs = {}, -- Uncomment to turn off hard-coded styles
-        },
-        lsp_styles = { -- Handles the style of specific lsp hl groups (see `:h lsp-highlight`).
-          virtual_text = {
-            errors = { 'italic' },
-            hints = { 'italic' },
-            warnings = { 'italic' },
-            information = { 'italic' },
-            ok = { 'italic' },
-          },
-          underlines = {
-            errors = { 'underline' },
-            hints = { 'underline' },
-            warnings = { 'underline' },
-            information = { 'underline' },
-            ok = { 'underline' },
-          },
-          inlay_hints = {
-            background = true,
-          },
-        },
-        color_overrides = {
-          all = {
-            base = '#000000',
-          },
-        },
-        custom_highlights = {
-          Normal = { bg = '#000000' },
-        },
-        default_integrations = true,
-        auto_integrations = false,
-        integrations = {
-          cmp = true,
-          gitsigns = true,
-          nvimtree = true,
-          notify = false,
-          mini = {
-            enabled = true,
-            indentscope_color = '',
-          },
-          -- For more plugins integrations please scroll down (https://github.com/catppuccin/nvim#integrations)
-        },
-      }
+  -- priority = 1000, -- Make sure to load this before all the other start plugins.
+  -- config = function()
+  --   ---@diagnostic disable-next-line: missing-fields
+  --   require('catppuccin').setup {
+  --     enabled = false,
+  --     styles = {
+  --       comments = { italic = false }, -- Disable italics in comments
+  --     },
+  --     flavour = 'auto', -- latte, frappe, macchiato, mocha
+  --     background = { -- :h background
+  --       light = 'latte',
+  --       dark = 'mocha',
+  --     },
+  --     transparent_background = false, -- disables setting the background color.
+  --     float = {
+  --       transparent = false, -- enable transparent floating windows
+  --       solid = false, -- use solid styling for floating windows, see |winborder|
+  --     },
+  --     show_end_of_buffer = false, -- shows the '~' characters after the end of buffers
+  --     term_colors = false, -- sets terminal colors (e.g. `g:terminal_color_0`)
+  --     dim_inactive = {
+  --       enabled = false, -- dims the background color of inactive window
+  --       shade = 'dark',
+  --       percentage = 0.15, -- percentage of the shade to apply to the inactive window
+  --     },
+  --     no_italic = false, -- Force no italic
+  --     no_bold = false, -- Force no bold
+  --     no_underline = false, -- Force no underline
+  --     styles = { -- Handles the styles of general hi groups (see `:h highlight-args`):
+  --       comments = { 'italic' }, -- Change the style of comments
+  --       conditionals = { 'italic' },
+  --       loops = {},
+  --       functions = {},
+  --       keywords = {},
+  --       strings = {},
+  --       variables = {},
+  --       numbers = {},
+  --       booleans = {},
+  --       properties = {},
+  --       types = {},
+  --       operators = {},
+  --       -- miscs = {}, -- Uncomment to turn off hard-coded styles
+  --     },
+  --     lsp_styles = { -- Handles the style of specific lsp hl groups (see `:h lsp-highlight`).
+  --       virtual_text = {
+  --         errors = { 'italic' },
+  --         hints = { 'italic' },
+  --         warnings = { 'italic' },
+  --         information = { 'italic' },
+  --         ok = { 'italic' },
+  --       },
+  --       underlines = {
+  --         errors = { 'underline' },
+  --         hints = { 'underline' },
+  --         warnings = { 'underline' },
+  --         information = { 'underline' },
+  --         ok = { 'underline' },
+  --       },
+  --       inlay_hints = {
+  --         background = true,
+  --       },
+  --     },
+  --     color_overrides = {
+  --       all = {
+  --         base = '#000000',
+  --       },
+  --     },
+  --     custom_highlights = {
+  --       Normal = { bg = '#000000' },
+  --     },
+  --     default_integrations = true,
+  --     auto_integrations = false,
+  --     integrations = {
+  --       cmp = true,
+  --       gitsigns = true,
+  --       nvimtree = true,
+  --       notify = false,
+  --       mini = {
+  --         enabled = true,
+  --         indentscope_color = '',
+  --       },
+  --       -- For more plugins integrations please scroll down (https://github.com/catppuccin/nvim#integrations)
+  --     },
+  --   }
 
-      -- Load the colorscheme here.
-      -- Like many other themes, this one has different styles, and you could load
-      -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'catppuccin'
-    end,
-  },
+  -- Load the colorscheme here.
+  -- Like many other themes, this one has different styles, and you could load
+  -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
+  --     vim.cmd.colorscheme 'catppuccin'
+  --   end,
+  -- },
 
   -- Highlight todo, notes, etc in comments
   { 'folke/todo-comments.nvim', event = 'VimEnter', dependencies = { 'nvim-lua/plenary.nvim' }, opts = { signs = false } },
@@ -1002,7 +1081,13 @@ require('lazy').setup({
       -- - saiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
       -- - sd'   - [S]urround [D]elete [']quotes
       -- - sr)'  - [S]urround [R]eplace [)] [']
-      require('mini.surround').setup()
+      require('mini.surround').setup {
+        mappings = {
+          add = 'ys', -- ysiw" instead of saiw"
+          delete = 'ds', -- ds" instead of sd"
+          replace = 'cs', -- cs"' instead of sr"'
+        },
+      }
 
       -- Simple and easy statusline.
       --  You could remove this setup call if you don't like it,
@@ -1039,7 +1124,7 @@ require('lazy').setup({
         --  the list of additional_vim_regex_highlighting and disabled languages for indent.
         additional_vim_regex_highlighting = { 'ruby' },
       },
-      indent = { enable = true, disable = { 'ruby' } },
+      indent = { enable = true, disable = { 'ruby', 'java', 'xml' } },
     },
     -- There are additional nvim-treesitter modules that you can use to interact
     -- with nvim-treesitter. You should go explore a few and see what interests you:
@@ -1062,7 +1147,7 @@ require('lazy').setup({
   -- require 'kickstart.plugins.indent_line',
   require 'kickstart.plugins.lint',
   require 'kickstart.plugins.autopairs',
-  require 'kickstart.plugins.neo-tree',
+  -- require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
@@ -1070,6 +1155,7 @@ require('lazy').setup({
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
   { import = 'custom.plugins' },
+  { import = 'custom.plugins.colorschemes' },
   --saghen/blink.cmp
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!
