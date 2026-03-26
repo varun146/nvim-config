@@ -1,42 +1,42 @@
 return {
   'sphamba/smear-cursor.nvim',
-  opts = {
-    -- Comet / particle trail
-    cursor_color = '#ffffff', -- fiery orange-red comet color
-    particles_enabled = true, -- THIS enables the comet tail
-
-    -- Comet physics
-
-    stiffness = 0.5,
-    trailing_stiffness = 0.2,
-
-    trailing_exponent = 5,
-    damping = 0.6,
-    gradient_exponent = 0,
-    gamma = 1,
-
-    -- Particle settings (controls the tail density and feel)
-    particle_spread = 1,
-    particles_per_second = 500,
-
-    particles_per_length = 50,
-    particle_max_lifetime = 800, -- how long each particle lives (ms)
-    particle_max_initial_velocity = 20,
-    particle_velocity_from_cursor = 0.5,
-
-    particle_damping = 0.15,
-
-    particle_gravity = -50, -- negative = particles float upward
-    min_distance_emit_particles = 0,
-
-    -- Keep existing settings
-    smear_between_buffers = true,
-    smear_between_neighbor_lines = true,
-    scroll_buffer_space = true,
-    legacy_computing_symbols_support = false,
-
-    -- So the cursor stays visible under the trail
-    never_draw_over_target = true,
-    hide_target_hack = true,
-  },
+  -- opts = {
+  --   -- Comet / particle trail
+  --   cursor_color = '#ffffff', -- fiery orange-red comet color
+  --   particles_enabled = true, -- THIS enables the comet tail
+  --
+  --   -- Comet physics
+  --
+  --   stiffness = 0.5,
+  --   trailing_stiffness = 0.2,
+  --
+  --   trailing_exponent = 5,
+  --   damping = 0.6,
+  --   gradient_exponent = 0,
+  --   gamma = 1,
+  --
+  --   -- Particle settings (controls the tail density and feel)
+  --   particle_spread = 1,
+  --   particles_per_second = 500,
+  --
+  --   particles_per_length = 50,
+  --   particle_max_lifetime = 800, -- how long each particle lives (ms)
+  --   particle_max_initial_velocity = 20,
+  --   particle_velocity_from_cursor = 0.5,
+  --
+  --   particle_damping = 0.15,
+  --
+  --   particle_gravity = -50, -- negative = particles float upward
+  --   min_distance_emit_particles = 0,
+  --
+  --   -- Keep existing settings
+  --   smear_between_buffers = true,
+  --   smear_between_neighbor_lines = true,
+  --   scroll_buffer_space = true,
+  --   legacy_computing_symbols_support = false,
+  --
+  --   -- So the cursor stays visible under the trail
+  --   never_draw_over_target = true,
+  --   hide_target_hack = true,
+  -- },
 }
